@@ -6,25 +6,28 @@ jobs:
   test:
     strategy:
       matrix:
-        arch: [x86_64]
-        os: [ubuntu, macos, windows]
+        include:
+          - arch: x86_64
+            host: ubuntu
+            target: linux
+          - arch: x86_64
+            host: macos
+            target: macos
+          - arch: x86_64
+            host: windows
+            target: windows
       fail-fast: false
-    runs-on: ${{matrix.os}}-latest
+    runs-on: ${{matrix.host}}-latest
     steps:
       - uses: actions/checkout@v2
       - uses: goto-bus-stop/setup-zig@v1
         with:
-          version: 0.11.0
+          version: master
       - run: |
-          zig build test -Dtarget=${{matrix.os}}-${{matrix.arch}}
+          zig build test -Dtarget=${{matrix.arch}}-${{matrix.target}}
       - run: |
-          zig build -Dtarget=${{matrix.os}}-${{matrix.arch}} -p zig-out-${{matrix.os}}-latest-${{matrix.arch}}
+          zig build -Dtarget=${{matrix.arch}}-${{matrix.target}}
       - uses: actions/upload-artifact@v2
         with:
-          name: zigup ${{ matrix.os }}-${{ matrix.arch }}
+          name: zigup ${{ matrix.arch }}-${{ matrix.target }}
           path: zig-out/bin/*
-      - if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
-        uses: actions/upload-artifact@v2
-        with:
-          name: zigup ${{ matrix.os }}-aarch64
-          path: zig-out-${{matrix.os}}-aarch64/bin/*

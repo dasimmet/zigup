@@ -52,12 +52,16 @@ fn downloadToFileAbsolute(allocator: Allocator, url: []const u8, file_absolute: 
     try req.wait();
 
     if (req.response.status.class() != .success) {
-        std.log.err("HTTP request failed: {}", .{req.response.status});
+        std.log.err("HTTP request failed: {d} - {s}", .{
+            @intFromEnum(req.response.status),
+            @tagName(req.response.status),
+        });
         return error.HttpNon200StatusCode;
     }
 
     var reader = req.reader();
-    var buf = try allocator.alloc(u8, 20 * 1024);
+    // 1MB Response buffer
+    var buf = try allocator.alloc(u8, 1024 * 1024);
     defer allocator.free(buf);
 
     while (true) {
@@ -90,7 +94,10 @@ fn downloadToString(allocator: Allocator, url: []const u8) ![]u8 {
     try req.wait();
 
     if (req.response.status.class() != .success) {
-        std.log.err("HTTP request failed: {}", .{req.response.status});
+        std.log.err("HTTP request failed: {d} - {s}", .{
+            @intFromEnum(req.response.status),
+            @tagName(req.response.status),
+        });
         return error.HttpNon200StatusCode;
     }
 

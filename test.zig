@@ -303,7 +303,9 @@ fn checkZigVersion(allocator: std.mem.Allocator, zig: []const u8, compare: []con
 }
 
 fn getCompilerCount(install_dir: []const u8) !u32 {
-    var dir = try std.fs.cwd().openIterableDir(install_dir, .{});
+    var dir = try std.fs.cwd().openDir(install_dir, .{
+        .iterate = true,
+    });
     defer dir.close();
     var it = dir.iterate();
     var count: u32 = 0;
@@ -325,7 +327,7 @@ fn trailNl(s: []const u8) []const u8 {
     return if (s.len == 0 or s[s.len - 1] != '\n') "\n" else "";
 }
 
-fn dumpExecResult(result: std.ChildProcess.ExecResult) void {
+fn dumpExecResult(result: std.ChildProcess.RunResult) void {
     if (result.stdout.len > 0) {
         std.debug.print("--- STDOUT ---\n{s}{s}--------------\n", .{ result.stdout, trailNl(result.stdout) });
     }
@@ -341,13 +343,17 @@ fn runNoCapture(argv: []const []const u8) !void {
     dumpExecResult(result);
     try passOrThrow(result.term);
 }
-fn runCaptureOuts(allocator: std.mem.Allocator, argv: []const []const u8) !std.ChildProcess.ExecResult {
+fn runCaptureOuts(allocator: std.mem.Allocator, argv: []const []const u8) !std.ChildProcess.RunResult {
     {
         const cmd = try std.mem.join(allocator, " ", argv);
         defer allocator.free(cmd);
         std.log.info("RUN: {s}", .{cmd});
     }
-    return try std.ChildProcess.exec(.{ .allocator = allocator, .argv = argv, .env_map = &child_env_map });
+    return try std.ChildProcess.run(.{
+        .allocator = allocator,
+        .argv = argv,
+        .env_map = &child_env_map,
+    });
 }
 fn passOrThrow(term: std.ChildProcess.Term) error{ChildProcessFailed}!void {
     if (!execResultPassed(term)) {
@@ -355,7 +361,7 @@ fn passOrThrow(term: std.ChildProcess.Term) error{ChildProcessFailed}!void {
         return error.ChildProcessFailed;
     }
 }
-fn passOrDumpAndThrow(result: std.ChildProcess.ExecResult) error{ChildProcessFailed}!void {
+fn passOrDumpAndThrow(result: std.ChildProcess.RunResult) error{ChildProcessFailed}!void {
     if (!execResultPassed(result.term)) {
         dumpExecResult(result);
         std.log.err("child process failed with {}", .{result.term});

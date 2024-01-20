@@ -3,10 +3,6 @@ const builtin = @import("builtin");
 const Builder = std.Build;
 const Pkg = std.Build.Pkg;
 
-// TODO: make this work with "GitRepoStep.zig", there is a
-//       problem with the -Dfetch option
-const GitRepoStep = @import("GitRepoStep.zig");
-
 fn unwrapOptionalBool(optionalBool: ?bool) bool {
     if (optionalBool) |b| return b;
     return false;
@@ -87,17 +83,7 @@ fn addZigupExe(
 
     if (target.result.os.tag == .windows) {
         exe.root_module.addImport("win32exelink", win32exelink_mod.?);
-        const zarc_repo = GitRepoStep.create(b, .{
-            .url = "https://github.com/dasimmet/zarc",
-            .branch = "fordep",
-            .sha = "780de61e2f71651317536df14fdcae740fe74aa4",
-            .fetch_enabled = true,
-        });
-        exe.step.dependOn(&zarc_repo.step);
-        const zarc_repo_path = zarc_repo.getPath(&exe.step);
-        const zarc_mod = b.addModule("zarc", .{
-            .root_source_file = .{ .path = b.pathJoin(&.{ zarc_repo_path, "src", "main.zig" }) },
-        });
+        const zarc_mod = b.dependency("zarc", .{}).module("zarc");
         exe.root_module.addImport("zarc", zarc_mod);
     }
     return exe;

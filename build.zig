@@ -17,7 +17,7 @@ pub fn build(b: *Builder) !void {
         if (target.result.os.tag == .windows) {
             const exe = b.addExecutable(.{
                 .name = "win32exelink",
-                .root_source_file = .{ .path = "win32exelink.zig" },
+                .root_source_file = .{ .path = "src/win32exelink.zig" },
                 .target = target,
                 .optimize = optimize,
             });
@@ -53,9 +53,9 @@ pub fn build(b: *Builder) !void {
             .paths = &[_][]const u8{
                 "build.zig",
                 "build.zig.zon",
-                "zigup.zig",
+                "src",
             },
-            .check = b.option(bool, "check", "check format") orelse true,
+            .check = b.option(bool, "check", "check format") orelse false,
         }).step,
     );
 }
@@ -63,7 +63,7 @@ pub fn build(b: *Builder) !void {
 fn addTest(b: *Builder, exe: *std.Build.Step.Compile, target: std.Build.ResolvedTarget, optimize: std.builtin.Mode) void {
     const test_exe = b.addExecutable(.{
         .name = "test",
-        .root_source_file = .{ .path = "test.zig" },
+        .root_source_file = .{ .path = "src/test.zig" },
         .target = target,
         .optimize = optimize,
     });
@@ -86,7 +86,7 @@ fn addZigupExe(
 ) !*std.Build.Step.Compile {
     const exe = b.addExecutable(.{
         .name = "zigup",
-        .root_source_file = .{ .path = "zigup.zig" },
+        .root_source_file = .{ .path = "src/zigup.zig" },
         .target = target,
         .optimize = optimize,
     });

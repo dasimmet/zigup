@@ -3,6 +3,15 @@ on:
   - pull_request
   - push
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: goto-bus-stop/setup-zig@v1
+        with:
+          version: master
+      - run: |
+          zig build fmt -Dcheck=true
   test:
     strategy:
       matrix:
@@ -23,8 +32,6 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v1
         with:
           version: master
-      - run: |
-          zig build fmt -Dcheck=true
       - run: |
           zig build test -Dtarget=${{matrix.arch}}-${{matrix.target}}
       - run: |

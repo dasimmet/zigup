@@ -24,6 +24,8 @@ jobs:
         with:
           version: master
       - run: |
+          zig build fmt -Dcheck=true
+      - run: |
           zig build test -Dtarget=${{matrix.arch}}-${{matrix.target}}
       - run: |
           zig build -Doptimize=ReleaseSafe -Dtarget=${{matrix.arch}}-${{matrix.target}}

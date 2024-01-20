@@ -51,22 +51,25 @@ fn downloadToFileAbsolute(allocator: Allocator, url: []const u8, file_absolute: 
     try req.send(.{});
     try req.wait();
 
-    var reader = req.reader().any();
-    var buf: [4069]u8 = undefined;
+    if (req.response.status.class() != .success) {
+        std.log.err("HTTP request failed: {}", .{req.response.status});
+        return error.HttpNon200StatusCode;
+    }
+
+    var reader = req.reader();
+    var buf = try allocator.alloc(u8, 20 * 1024);
+    defer allocator.free(buf);
 
     while (true) {
-        const count = reader.read(&buf) catch |e| {
+        const count = reader.read(buf) catch |e| {
             switch (e) {
                 error.EndOfStream => return,
                 else => return e,
             }
         };
         if (count == 0) return;
-
         _ = try file.write(buf[0..count]);
     }
-
-    // try download(allocator, url, file.writer());
 }
 
 fn downloadToString(allocator: Allocator, url: []const u8) ![]u8 {
@@ -85,8 +88,14 @@ fn downloadToString(allocator: Allocator, url: []const u8) ![]u8 {
 
     try req.send(.{});
     try req.wait();
+
+    if (req.response.status.class() != .success) {
+        std.log.err("HTTP request failed: {}", .{req.response.status});
+        return error.HttpNon200StatusCode;
+    }
+
     var res = std.ArrayList(u8).init(allocator);
-    try req.reader().any().readAllArrayList(&res, std.math.maxInt(usize));
+    try req.reader().readAllArrayList(&res, std.math.maxInt(usize));
 
     return res.toOwnedSlice();
 }
@@ -937,7 +946,7 @@ fn installCompiler(allocator: Allocator, compiler_dir: []const u8, url: []const 
         downloadToFileAbsolute(allocator, url, archive_absolute) catch |e| switch (e) {
             error.HttpNon200StatusCode => {
                 try loggyDeleteTreeAbsolute(installing_dir);
-                return error.HttpNon200StatusCode;
+                return e;
             },
             else => return e,
         };

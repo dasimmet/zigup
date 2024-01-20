@@ -14,7 +14,7 @@ pub fn build(b: *Builder) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     const win32exelink_mod: ?*std.Build.Module = blk: {
-        if (target.query.os_tag == .windows) {
+        if (target.result.os.tag == .windows) {
             const exe = b.addExecutable(.{
                 .name = "win32exelink",
                 .root_source_file = .{ .path = "win32exelink.zig" },

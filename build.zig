@@ -47,6 +47,17 @@ pub fn build(b: *Builder) !void {
     }
 
     addTest(b, exe, target, optimize);
+
+    b.step("fmt", "format source").dependOn(
+        &b.addFmt(.{
+            .paths = &[_][]const u8{
+                "build.zig",
+                "build.zig.zon",
+                "zigup.zig",
+            },
+            .check = b.option(bool, "check", "check format") orelse true,
+        }).step,
+    );
 }
 
 fn addTest(b: *Builder, exe: *std.Build.Step.Compile, target: std.Build.ResolvedTarget, optimize: std.builtin.Mode) void {
@@ -73,7 +84,6 @@ fn addZigupExe(
     optimize: std.builtin.Mode,
     win32exelink_mod: ?*std.Build.Module,
 ) !*std.Build.Step.Compile {
-
     const exe = b.addExecutable(.{
         .name = "zigup",
         .root_source_file = .{ .path = "zigup.zig" },
@@ -88,24 +98,3 @@ fn addZigupExe(
     }
     return exe;
 }
-
-fn addGithubReleaseExe(b: *Builder, github_release_step: *std.Build.Step, comptime target_triple: []const u8) !void {
-    const small_release = true;
-
-    const target = try std.zig.CrossTarget.parse(.{ .arch_os_abi = target_triple });
-    const mode = if (small_release) .ReleaseSafe else .Debug;
-    const exe = try addZigupExe(b, target, mode);
-    if (small_release) {
-        exe.strip = true;
-    }
-    exe.setOutputDir("github-release" ++ std.fs.path.sep_str ++ target_triple);
-    github_release_step.dependOn(&exe.step);
-}
-
-const ci_target_map = std.ComptimeStringMap([]const u8, .{
-    .{ "ubuntu-latest-x86_64", "x86_64-linux" },
-    .{ "macos-latest-x86_64", "x86_64-macos" },
-    .{ "windows-latest-x86_64", "x86_64-windows" },
-    .{ "ubuntu-latest-aarch64", "aarch64-linux" },
-    .{ "macos-latest-aarch64", "aarch64-macos" },
-});

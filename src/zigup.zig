@@ -44,7 +44,12 @@ fn downloadToFileAbsolute(allocator: Allocator, url: []const u8, file_absolute: 
     defer client.deinit();
 
     const uri = try std.Uri.parse(url);
-    const headers = std.http.Headers.init(allocator);
+    const headers = try std.http.Headers.initList(allocator, &.{
+        .{ .name = "User-Agent", .value = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.9; rv:50.0) Gecko/20100101 Firefox/50.0" },
+        .{ .name = "Accept", .value = "*/*" },
+        .{ .name = "Accept-Encoding", .value = "*/*" },
+        .{ .name = "Connection", .value = "keep-alive" },
+    });
     var req = try client.open(.GET, uri, headers, .{});
     defer req.deinit();
 
@@ -249,6 +254,8 @@ pub fn main2() !u8 {
             } else if (std.mem.eql(u8, "-h", arg) or std.mem.eql(u8, "--help", arg)) {
                 help();
                 return 0;
+            } else if (newlen == 0 and std.mem.eql(u8, "dev", arg)) {
+                return try runDevCompiler(allocator, args[i + 1 ..]);
             } else {
                 if (newlen == 0 and std.mem.eql(u8, "run", arg)) {
                     return try runCompiler(allocator, args[i + 1 ..]);
@@ -357,6 +364,143 @@ pub fn main2() !u8 {
     //const optionalInstallPath = try find_zigs(allocator);
 }
 
+pub fn runDevCompiler(allocator: Allocator, args: []const []const u8) !u8 {
+    global_enable_log = false;
+    if (args.len <= 1) {
+        std.log.err("zigup dev requires at least 2 arguments: zigup dev VERSION PROG ARGS...", .{});
+        return 1;
+    }
+    const version_string = args[0];
+
+    const install_dir_string = try getInstallDir(allocator, .{ .create = true });
+    defer allocator.free(install_dir_string);
+
+    const dev_dir = try std.fs.path.join(allocator, &[_][]const u8{ install_dir_string, "dev" });
+    defer allocator.free(dev_dir);
+
+    if (!try existsAbsolute(dev_dir)) {
+        const res = try run(allocator, &[_][]const u8{
+            "git",
+            "clone",
+            "--no-checkout",
+            "https://github.com/ziglang/zig.git",
+            dev_dir,
+        });
+        if (res != .Exited or res.Exited != 0) {
+            std.log.err("git clone failed", .{});
+            return 1;
+        }
+    }
+    {
+        const res = try run(allocator, &[_][]const u8{
+            "git",
+            "-C",
+            dev_dir,
+            "fetch",
+        });
+        if (res != .Exited or res.Exited != 0) {
+            std.log.err("git fetch failed", .{});
+            return 1;
+        }
+    }
+    {
+        const res = try run(allocator, &[_][]const u8{
+            "git",
+            "-C",
+            dev_dir,
+            "checkout",
+            "--detach",
+            version_string,
+        });
+        if (res != .Exited or res.Exited != 0) {
+            std.log.err("git checkout failed", .{});
+            return 1;
+        }
+    }
+    const tc_dir = try std.fs.path.join(
+        allocator,
+        &[_][]const u8{ install_dir_string, "dev", "build" },
+    );
+    defer allocator.free(tc_dir);
+
+    const bootstrap_target =
+        comptime json_platform ++ if (builtin.os.tag == .linux) "-gnu-baseline" else "";
+
+    if (!try existsAbsolute(tc_dir)) {
+        try std.fs.makeDirAbsolute(tc_dir);
+    }
+    const tc_install_dir = try std.fs.path.join(
+        allocator,
+        &[_][]const u8{ tc_dir, bootstrap_target },
+    );
+    defer allocator.free(tc_install_dir);
+
+    if (!try existsAbsolute(tc_install_dir)) {
+        const tc_file = try std.fs.path.join(
+            allocator,
+            &[_][]const u8{ tc_dir, bootstrap_target ++ ".tar.xz" },
+        );
+        defer allocator.free(tc_file);
+        const url = "https://gitlab.com/dasimmet/zig-bootstrap/-/package_files/109085505/download";
+        // "https://gitlab.com/api/v4/projects/dasimmet%2Fzig-bootstrap/packages/generic/zig-bootstrap/rev-fb6231bb/" ++ bootstrap_target ++ ".tar.xz";
+        std.log.err("tar: {s}", .{url});
+        try downloadToFileAbsolute(allocator, url, tc_file);
+
+        {
+            const res = try run(allocator, &[_][]const u8{
+                "tar",
+                "-C",
+                tc_dir,
+                "-xf",
+                tc_file,
+            });
+            if (res != .Exited or res.Exited != 0) {
+                std.log.err("untar failed", .{});
+                return 1;
+            }
+        }
+    }
+
+    const zig_exe = try std.fs.path.join(
+        allocator,
+        &[_][]const u8{ dev_dir, "zig-out", "bin", comptime "zig" ++ builtin.target.exeFileExt() },
+    );
+    defer allocator.free(zig_exe);
+
+    if (!try existsAbsolute(zig_exe)) {
+        const lib_dir = try std.fs.path.join(
+            allocator,
+            &[_][]const u8{ dev_dir, "lib" },
+        );
+        defer allocator.free(lib_dir);
+        const build_zig = try std.fs.path.join(
+            allocator,
+            &[_][]const u8{ dev_dir, "build.zig" },
+        );
+        defer allocator.free(build_zig);
+
+        {
+            const res = try run(allocator, &[_][]const u8{
+                "zig",
+                "build",
+                "-Dstatic-llvm",
+                "--zig-lib-dir",
+                lib_dir,
+                "--search-prefix",
+                tc_install_dir,
+                "--build-file",
+                build_zig,
+            });
+            if (res != .Exited or res.Exited != 0) {
+                std.log.err("zig build failed", .{});
+                return 1;
+            }
+        }
+    }
+
+    return runResolvedCompiler(allocator, zig_exe, args[1..]);
+}
+
 pub fn runCompiler(allocator: Allocator, args: []const []const u8) !u8 {
     // disable log so we don't add extra output to whatever the compiler will output
     global_enable_log = false;
@@ -375,11 +519,18 @@ pub fn runCompiler(allocator: Allocator, args: []const []const u8) !u8 {
         return 1;
     }
 
-    var argv = std.ArrayList([]const u8).init(allocator);
-    try argv.append(try std.fs.path.join(allocator, &.{ compiler_dir, "files", comptime "zig" ++ builtin.target.exeFileExt() }));
-    try argv.appendSlice(args[1..]);
+    const zig_exe = try std.fs.path.join(allocator, &.{ compiler_dir, "files", comptime "zig" ++ builtin.target.exeFileExt() });
+    defer allocator.free(zig_exe);
 
+    return runResolvedCompiler(allocator, zig_exe, args[1..]);
+}
+
+pub fn runResolvedCompiler(allocator: Allocator, zig_exe: []const u8, args: []const []const u8) !u8 {
     // TODO: use "execve" if on linux
+    var argv = std.ArrayList([]const u8).init(allocator);
+    try argv.append(zig_exe);
+    try argv.appendSlice(args);
+
     var proc = std.ChildProcess.init(argv.items, allocator);
     const ret_val = try proc.spawnAndWait();
     switch (ret_val) {

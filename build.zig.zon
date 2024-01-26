@@ -4,8 +4,8 @@
     .version = "0.0.1",
     .dependencies = .{
         .zarc = .{
-            .url = "https://github.com/dasimmet/zarc/archive/47fbe846cf53c0cd9dfc7219cafbf8c1b4b3d268.tar.gz",
-            .hash = "1220968c1990d679f0bd3fdb127003b416fe7c42ae68d36912858311e9faa55e3744",
+            .url = "https://github.com/dasimmet/zarc/archive/4071cef8eaab344a52765ef0eda1c8f02c4c414b.tar.gz",
+            .hash = "12203edf7608adb8caddba0e29a1a4ac084c2e8cce4ccd3cb9ca9b097182696e6adb",
         },
     },
 }
